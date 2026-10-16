@@ -7,9 +7,16 @@
 
 ## 架构
 ```
-POST /api/v1/compliance  (draft + [standard 或 spec_slug])
-  → 解析草案 → 加载标准判据 → 逐条判定(合规/违规/缺项/不完整) → 《贯标核查报告.md》+ compliance.json
+POST /api/v1/compliance  (draft + [standard 或 spec_slug 或 auto])
+  → 解析草案 → 选/加载标准判据 → 逐条判定(合规/违规/缺项/不完整) → 《贯标核查报告.md》+ compliance.json
 ```
+
+## 技能注册表 + 路由（load all + select subset）
+- `core/registry.py`：扫描 `standard-distill-agent/specs/*/skills/*/SKILL.md` → 建索引 `data/registry.json`（名字+描述+标准+条号+路径），**不把全量塞进内存/上下文**。
+- `core/router.py`：为一份草案**多路召回**（标准号 + 条号 + 关键词二元组）取并集 → **LLM 精排** → 选相关 skill 子集（召回优先，宁多勿漏）。
+- **三种判据来源**：`spec_slug=<标准>`（单标准）/ `standard=<PDF>`（现场抽条款）/ **`auto`**（只传草案，自动从全部标准挑 skill）。
+
+> 路由可靠性：**条号命中/标准号路由** 准；**纯语义匹配** 中低。故采用"召回优先 + 多路并集 + 条款级兜底 + 可人工核对"。无标准号时精度下降（条号跨标准碰撞）。
 外部依赖：MinerU(10.100.100.99:8000)、vLLM qwen3.8-27b。
 
 ## 配置分环境

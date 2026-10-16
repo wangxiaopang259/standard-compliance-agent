@@ -10,7 +10,7 @@ from pathlib import Path
 from core.config import settings
 from core import store
 from core.ai_client import get_llm
-from core import compliance
+from core import compliance, registry as registry_mod, router
 from infrastructure import mineru_client
 
 
@@ -48,14 +48,28 @@ def run_job(job_id: str, draft_path, standard_path=None, spec_slug: str = "",
         store.append_log(job_id, f"草案解析 {len(ctx.draft_text)} 字")
 
         store.update_job(job_id, status="loading_standard", stage="standard")
-        if ctx.spec_slug:
+        auto = (ctx.spec_slug in ("", "auto", "__auto__")) and ctx.standard_path is None
+        if ctx.spec_slug and ctx.spec_slug not in ("auto", "__auto__"):
             spec_dir = settings.specs_dir / ctx.spec_slug
             if spec_dir.exists():
                 ctx.clauses, ctx.skills_blob = compliance.load_std_from_spec(spec_dir)
                 store.append_log(job_id, f"判据=已蒸馏目录 {spec_dir.name}（条 {len(ctx.clauses)}）")
+        if auto:
+            # 自动路由：从全部已蒸馏标准里挑相关 skill
+            reg = registry_mod.load_or_build(settings.specs_dir, settings.data_dir / "registry.json")
+            routing = router.route(ctx.draft_text, reg, get_llm())
+            selected = routing["selected_items"]
+            ctx.skills_blob = router.load_selected_text(selected, reg)
+            ctx.clauses = [{"clause": c, "text": "", "keyword": s["skill"]}
+                           for s in selected for c in s.get("clauses", [])]
+            (out / "routing.json").write_text(
+                json.dumps({k: v for k, v in routing.items() if k != "selected_items"},
+                           ensure_ascii=False, indent=2), encoding="utf-8")
+            store.append_log(job_id, f"自动路由：选中 {len(selected)} 个 skill "
+                                     f"（库 {len(reg)}，召回 {routing['counts']}）")
         if not ctx.clauses:
             if not ctx.standard_path:
-                raise ValueError("缺少标准（standard 文件或 spec_slug）")
+                raise ValueError("缺少标准（standard 文件 / spec_slug / auto 路由无命中）")
             ctx.std_text = mineru_client.parse_file(ctx.standard_path)
             llm = get_llm()
             ctx.clauses = compliance.extract_std_clauses(ctx.std_text, llm, settings.max_std_clauses)

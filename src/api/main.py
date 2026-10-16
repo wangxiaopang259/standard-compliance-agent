@@ -48,8 +48,9 @@ async def compliance(
     fn = (draft.filename or "").lower()
     if not fn.endswith(_ALLOWED):
         raise HTTPException(400, f"不支持的文件类型，仅支持 {_ALLOWED}")
+    # 不给标准也不给 spec_slug → 自动路由（从全部已蒸馏标准挑 skill）
     if standard is None and not spec_slug:
-        raise HTTPException(400, "需提供 standard 文件或 spec_slug（已蒸馏目录）")
+        spec_slug = "auto"
 
     job_id = new_job_id()
     jd = settings.uploads_dir / job_id
