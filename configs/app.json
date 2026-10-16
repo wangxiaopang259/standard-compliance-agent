@@ -1,0 +1,22 @@
+{
+  "_comment": "贯标核验智能体配置。LLM/VL/MinerU 维护在此；环境变量优先级最高（APP_ENV 选环境）。",
+  "server": { "host": "0.0.0.0", "port": 6002 },
+  "llm": {
+    "default_model": "qwen3.8-27b",
+    "providers": {
+      "qwen38": {
+        "base_url": "http://112.111.7.77:31632/v1",
+        "api_key": "",
+        "models": ["qwen3.8-27b"],
+        "disable_thinking": true
+      }
+    }
+  },
+  "vl": { "default_model": "qwen3.8-27b", "base_url": "http://112.111.7.77:31632/v1", "api_key": "" },
+  "mineru": { "url": "http://10.100.100.99:8000", "enabled": true, "timeout": 1800 },
+  "compliance": {
+    "specs_dir": "../standard-distill-agent/specs",
+    "standards_dir": "../../10000-强标实施责任清单/05-强标文本",
+    "max_std_clauses": 120
+  }
+}

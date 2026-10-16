@@ -1,0 +1,5 @@
+{
+  "_comment": "生产环境：内网直连 vLLM。APP_ENV=prod（默认）。",
+  "llm": { "providers": { "qwen38": { "base_url": "http://112.111.7.77:31632/v1" } } },
+  "vl": { "base_url": "http://112.111.7.77:31632/v1" }
+}

@@ -1,0 +1,5 @@
+{
+  "_comment": "开发环境：本机经 SSH 隧道访问 vLLM（127.0.0.1:31633）。APP_ENV=dev 生效。",
+  "llm": { "providers": { "qwen38": { "base_url": "http://127.0.0.1:31633/v1" } } },
+  "vl": { "base_url": "http://127.0.0.1:31633/v1" }
+}
