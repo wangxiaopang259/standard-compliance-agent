@@ -1,0 +1,145 @@
+{
+  "info": {
+    "name": "Standard Compliance Agent",
+    "_postman_id": "7b2e4d1a-2c5f-4a8b-b0e1-compliance6002",
+    "description": "贯标核验智能体（端口 6002）。判断一份待审查文件（施工组织/作业方案/验收报告…）是否满足某标准条款。\n\n三种判据来源：① 上传标准 PDF；② spec_slug 指定已蒸馏目录；③ 只传草案（自动路由）。\n上传接口的 file 字段请在 Postman 里选择本地文件。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:6002" },
+    { "key": "job_id", "value": "" },
+    { "key": "spec_slug", "value": "gb-16994.1-2021" },
+    { "key": "std_name", "value": "GB 16994.1-2021" }
+  ],
+  "item": [
+    {
+      "name": "健康检查",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+      }
+    },
+    {
+      "name": "贯标核验（上传标准 PDF）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+              "const j = pm.response.json();",
+              "if (j.job_id) { pm.collectionVariables.set('job_id', j.job_id); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "draft", "type": "file", "src": "", "description": "必填：待审查文件（pdf/doc/docx/md/txt/图片）" },
+            { "key": "standard", "type": "file", "src": "", "description": "标准 PDF（与 spec_slug 二选一）" },
+            { "key": "std_name", "type": "text", "value": "{{std_name}}" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/compliance", "host": ["{{baseUrl}}"], "path": ["api", "v1", "compliance"] }
+      }
+    },
+    {
+      "name": "贯标核验（用已蒸馏目录 spec_slug）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+              "const j = pm.response.json();",
+              "if (j.job_id) { pm.collectionVariables.set('job_id', j.job_id); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "draft", "type": "file", "src": "", "description": "必填：待审查文件" },
+            { "key": "spec_slug", "type": "text", "value": "{{spec_slug}}", "description": "已蒸馏目录 slug，如 gb-16994.1-2021" },
+            { "key": "std_name", "type": "text", "value": "{{std_name}}" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/compliance", "host": ["{{baseUrl}}"], "path": ["api", "v1", "compliance"] }
+      }
+    },
+    {
+      "name": "贯标核验（auto 自动路由，只传草案）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', function () { pm.response.to.have.status(202); });",
+              "const j = pm.response.json();",
+              "if (j.job_id) { pm.collectionVariables.set('job_id', j.job_id); }"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "draft", "type": "file", "src": "", "description": "只传草案；后端从全部已蒸馏标准自动挑 skill" }
+          ]
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/compliance", "host": ["{{baseUrl}}"], "path": ["api", "v1", "compliance"] }
+      }
+    },
+    {
+      "name": "任务状态",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/compliance/status/{{job_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "compliance", "status", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "核验结果（报告 + compliance.json）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/compliance/result/{{job_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "compliance", "result", "{{job_id}}"]
+        }
+      }
+    },
+    {
+      "name": "下载报告（Markdown）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/compliance/download/{{job_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "compliance", "download", "{{job_id}}"]
+        }
+      }
+    }
+  ]
+}
