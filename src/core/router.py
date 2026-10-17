@@ -41,7 +41,8 @@ def _kw_hits(registry: list[dict], kws: list[str], limit: int) -> list[dict]:
     kw_bg = [(_bigrams(k), k) for k in kws if len(k) >= 2]
     scored = []
     for s in registry:
-        blob = (s.get("description", "") + " " + s.get("skill", "") + " " + " ".join(s.get("clauses", [])))
+        blob = (s.get("description", "") + " " + s.get("skill", "") + " "
+                + " ".join(s.get("triggers", [])) + " " + " ".join(s.get("clauses", [])))
         bg = _bigrams(blob)
         sc = sum(1 for kg, _ in kw_bg if kg & bg)
         if sc:
