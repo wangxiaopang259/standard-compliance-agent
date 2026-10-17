@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>standard-compliance-agent · 贯标核验</title>
+<style>
+ :root{--pri:#2563eb;--line:#e5e7eb;--muted:#6b7280}
+ *{box-sizing:border-box}
+ body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f7fa;color:#1f2937}
+ header{background:#fff;border-bottom:1px solid var(--line);padding:14px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+ header h1{font-size:17px;margin:0}
+ .wrap{max-width:1040px;margin:0 auto;padding:24px}
+ .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:16px}
+ label{font-size:13px;font-weight:600;display:block;margin:10px 0 4px}
+ input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+ input[type=file]{font-size:13px}
+ button{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:9px 18px;font-size:14px;cursor:pointer}
+ button:disabled{background:#93c5fd;cursor:not-allowed}
+ button.ghost{background:#fff;color:var(--pri);border:1px solid var(--pri)}
+ .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+ .muted{color:var(--muted);font-size:13px}
+ .bar{height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;margin-top:10px}
+ .bar>i{display:block;height:100%;background:var(--pri);transition:.3s}
+ .pill{display:inline-block;font-size:12px;border-radius:10px;padding:1px 8px;background:#eef2ff;color:#4338ca}
+ .pill.green{background:#dcfce7;color:#15803d}.pill.red{background:#fee2e2;color:#b91c1c}.pill.amber{background:#fef3c7;color:#b45309}
+ table{border-collapse:collapse;width:100%;font-size:13px}
+ th,td{border:1px solid var(--line);padding:6px 9px;text-align:left}
+ th{background:#f8fafc}
+ pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:8px;overflow:auto;max-height:420px;font-size:12.5px;white-space:pre-wrap}
+ a{color:var(--pri)}
+</style>
+</head>
+<body>
+<header>
+  <h1>standard-compliance-agent</h1>
+  <span class="pill">步骤2 · 贯标核验</span>
+  <span class="pill">前端 :5013 · 后端 :5013</span>
+  <span style="flex:1"></span><span id="health" class="muted"></span>
+</header>
+<div class="wrap">
+  <div class="card">
+    <div style="font-size:14px;line-height:1.6"><b>用途：</b>上传一份待审查文件（施工组织设计/作业方案/验收报告…）+ 标准（或已蒸馏 <code>spec_slug</code>，留空自动路由）→ 逐条判定是否满足标准条款 → 输出《贯标核查报告.md》+ compliance.json。</div>
+    <div class="muted" style="margin-top:8px">接口同源：<code>http://localhost:5013</code> ｜ <code>POST /api/v1/compliance</code> → 轮询 <code>GET /api/v1/compliance/status/&lt;id&gt;</code> → 结果 <code>GET /api/v1/compliance/result/&lt;id&gt;</code></div>
+  </div>
+
+  <div class="card">
+    <label>待审查文件（必填，pdf/doc/docx/md/txt/图片）</label>
+    <input id="draft" type="file">
+    <label>标准文件（可选；也可用下方 spec_slug 指向已蒸馏判据）</label>
+    <input id="standard" type="file">
+    <div class="row">
+      <div style="flex:1"><label>spec_slug（可选，已蒸馏标准）</label><input id="spec_slug" type="text" placeholder="如 gb-16994.1-2021；留空则自动路由"></div>
+      <div style="flex:1"><label>标准名称 std_name（可选）</label><input id="std_name" type="text" placeholder="如 GB 16994.1-2021"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="runBtn">开始核验</button>
+      <span id="statusText" class="muted"></span>
+    </div>
+    <div class="bar" id="barWrap" style="display:none"><i id="bar" style="width:0"></i></div>
+  </div>
+
+  <div id="resultCard" class="card" style="display:none"></div>
+
+  <div class="card">
+    <div class="row"><b>历史任务</b><button class="ghost" id="refresh">刷新</button></div>
+    <div id="history" class="muted" style="margin-top:8px">加载中…</div>
+  </div>
+</div>
+
+<script>
+let curId=null;
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+const fmt=(s)=>esc((s||'').replace('T',' ').slice(0,19));
+
+async function loadHealth(){
+  try{ const r=await (await fetch('/health')).json();
+    $('health').textContent='服务正常 · '+(r.service||'');
+  }catch(e){ $('health').textContent='服务未就绪'; }
+}
+
+$('runBtn').onclick=async()=>{
+  const draft=$('draft').files[0];
+  if(!draft){ $('statusText').textContent='请先选择待审查文件'; return; }
+  $('runBtn').disabled=true; $('resultCard').style.display='none';
+  const fd=new FormData();
+  fd.append('draft',draft);
+  const std=$('standard').files[0]; if(std) fd.append('standard',std);
+  if($('spec_slug').value) fd.append('spec_slug',$('spec_slug').value);
+  if($('std_name').value) fd.append('std_name',$('std_name').value);
+  try{
+    $('statusText').textContent='上传中…'; showBar(5);
+    const r=await (await fetch('/api/v1/compliance',{method:'POST',body:fd})).json();
+    curId=r.job_id; await poll();
+  }catch(e){ $('statusText').textContent='失败：'+e; $('runBtn').disabled=false; }
+};
+
+function showBar(p){ $('barWrap').style.display='block'; $('bar').style.width=(p||0)+'%'; }
+function hideBar(){ $('barWrap').style.display='none'; }
+
+async function poll(){
+  while(true){
+    let s; try{ s=await (await fetch('/api/v1/compliance/status/'+curId)).json(); }catch(e){ await sleep(1500); continue; }
+    const p=(s.progress&&s.progress.percent)||0;
+    showBar(p);
+    $('statusText').textContent='任务 '+curId+' · '+(s.status||'')+' · 阶段 '+((s.progress&&s.progress.stage)||'')+'（'+p+'%）';
+    if(s.status==='completed'){ hideBar(); await showResult(); $('runBtn').disabled=false; loadHistory(); break; }
+    if(s.status==='failed'){ hideBar(); $('statusText').textContent='失败：'+(s.error||''); $('runBtn').disabled=false; loadHistory(); break; }
+    await sleep(1500);
+  }
+}
+
+async function showResult(){
+  const c=$('resultCard'); c.style.display='block'; c.innerHTML='<div class="muted">结果加载中…</div>';
+  let r;
+  try{ r=await (await fetch('/api/v1/compliance/result/'+curId)).json(); }catch(e){ c.innerHTML='<div class="muted">结果加载失败</div>'; return; }
+  let h='<div class="row"><b>贯标核查报告</b><span style="flex:1"></span>'+
+    '<a href="/api/v1/compliance/download/'+curId+'/report" target="_blank">报告.md</a> '+
+    '<a href="/api/v1/compliance/download/'+curId+'/result" target="_blank">compliance.json</a> '+
+    '<a href="/api/v1/compliance/download/'+curId+'/trace" target="_blank">trace</a></div>'+
+    '<div class="muted" style="margin:6px 0">标准：'+esc(r.std_name||'—')+' ｜ 耗时：'+((r.duration_ms||0)/1000).toFixed(1)+'s ｜ tokens：'+esc(((r.tokens||{}).total_tokens)||'—')+'</div>';
+  if(r.report_md) h+='<pre>'+esc(r.report_md)+'</pre>';
+  else if(r.compliance) h+='<pre>'+esc(JSON.stringify(r.compliance,null,2))+'</pre>';
+  c.innerHTML=h;
+}
+
+async function loadHistory(){
+  try{
+    const r=await (await fetch('/api/v1/compliance/jobs?limit=20')).json();
+    const items=r.items||[];
+    if(!items.length){ $('history').textContent='暂无记录'; return; }
+    let h='<table><tr><th>任务</th><th>标准</th><th>状态</th><th>耗时</th><th>创建</th></tr>';
+    for(const it of items){
+      const cls=it.status==='completed'?'green':(it.status==='failed'?'red':'amber');
+      h+='<tr><td>'+esc(it.job_id)+'</td><td>'+esc(it.std_name||it.slug||'')+'</td>'+
+        '<td><span class="pill '+cls+'">'+esc(it.status)+'</span></td>'+
+        '<td class="muted">'+(it.duration_ms?(it.duration_ms/1000).toFixed(1)+'s':'—')+'</td>'+
+        '<td class="muted">'+fmt(it.created_at)+'</td></tr>';
+    }
+    $('history').innerHTML=h+'</table>';
+  }catch(e){ $('history').textContent='加载失败'; }
+}
+
+$('refresh').onclick=loadHistory;
+loadHealth(); loadHistory(); setInterval(loadHealth,30000);
+</script>
+</body>
+</html>

@@ -32,6 +32,9 @@ class AIClient:
         self.tunnel_cmd = os.environ.get(
             "TUNNEL_CMD", tunnel_cmd if tunnel_cmd is not None else getattr(settings, "llm_tunnel_cmd", ""))
         self._tunnel_started = False
+        # trace 回调：callable(record: dict) -> None；由 orchestrator 注入
+        self.trace_sink = None
+        self.trace_tag = ""
 
     # ---- 基础 ----
     def _headers(self) -> dict:
@@ -74,29 +77,60 @@ class AIClient:
             p["max_tokens"] = max_tokens
         return p
 
-    def _chat_once(self, messages, temperature, response_format, max_tokens) -> str:
+    def _record(self, rec: dict) -> None:
+        if self.trace_sink is not None:
+            try:
+                self.trace_sink(rec)
+            except Exception:  # trace 失败不影响主流程
+                pass
+
+    def _chat_once(self, messages, temperature, response_format, max_tokens) -> tuple:
+        t0 = time.time()
         with httpx.Client(timeout=self.timeout, trust_env=False) as c:
             r = c.post(f"{self.base_url}/chat/completions", headers=self._headers(),
                        json=self._payload(messages, temperature, response_format, max_tokens))
             r.raise_for_status()
             data = r.json()
-        return data["choices"][0]["message"].get("content") or ""
+        dur = round((time.time() - t0) * 1000, 1)
+        content = data["choices"][0]["message"].get("content") or ""
+        usage = data.get("usage") or {}
+        return content, usage, dur, data["choices"][0].get("finish_reason")
 
     def chat(self, messages: list, temperature: float = 0.0,
              response_format: dict | None = None, max_tokens: int | None = None) -> str:
         last = None
+        req_chars = sum(len(str(m.get("content") or "")) for m in messages)
         for attempt in range(self.max_retries + 1):
             try:
-                return self._chat_once(messages, temperature, response_format, max_tokens)
+                content, usage, dur, finish = self._chat_once(
+                    messages, temperature, response_format, max_tokens)
+                self._record({
+                    "tag": self.trace_tag, "model": self.model, "attempt": attempt,
+                    "ok": True, "duration_ms": dur,
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "completion_tokens": usage.get("completion_tokens"),
+                    "total_tokens": usage.get("total_tokens"),
+                    "request_chars": req_chars, "response_chars": len(content),
+                    "finish_reason": finish,
+                })
+                return content
             except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout,
                     httpx.RemoteProtocolError) as e:
                 last = e
                 self._tunnel_started = False          # 允许下次重试时再次拉起
+                self._record({
+                    "tag": self.trace_tag, "model": self.model, "attempt": attempt,
+                    "ok": False, "error": f"{type(e).__name__}: {e}", "request_chars": req_chars,
+                })
                 if attempt < self.max_retries:
                     time.sleep(min(2 * attempt + 2, 10))
                     self._ensure_tunnel()
                 continue
             except httpx.HTTPStatusError as e:
+                self._record({
+                    "tag": self.trace_tag, "model": self.model, "attempt": attempt,
+                    "ok": False, "error": f"HTTP {e.response.status_code}", "request_chars": req_chars,
+                })
                 if e.response.status_code >= 500 and attempt < self.max_retries:
                     time.sleep(min(2 * attempt + 2, 10))
                     continue

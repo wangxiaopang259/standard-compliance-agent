@@ -27,9 +27,23 @@ CREATE TABLE IF NOT EXISTS jobs (
     slug          TEXT DEFAULT '',
     source        TEXT DEFAULT '{}',
     created_at    TEXT DEFAULT '',
-    updated_at    TEXT DEFAULT ''
+    updated_at    TEXT DEFAULT '',
+    std_name      TEXT DEFAULT '',
+    trace_path    TEXT DEFAULT '',
+    tokens        TEXT DEFAULT '{}',
+    duration_ms   INTEGER DEFAULT 0,
+    finished_at   TEXT DEFAULT ''
 );
 """
+
+# 老库补列（CREATE TABLE IF NOT EXISTS 不会给已存在的表加列）
+_MIGRATE_COLS = [
+    ("std_name", "TEXT DEFAULT ''"),
+    ("trace_path", "TEXT DEFAULT ''"),
+    ("tokens", "TEXT DEFAULT '{}'"),
+    ("duration_ms", "INTEGER DEFAULT 0"),
+    ("finished_at", "TEXT DEFAULT ''"),
+]
 
 
 def _now() -> str:
@@ -45,6 +59,11 @@ def _conn() -> sqlite3.Connection:
 def init_db() -> None:
     with _LOCK, _conn() as c:
         c.executescript(_SCHEMA)
+        # 老库补列
+        existing = {r["name"] for r in c.execute("PRAGMA table_info(jobs)").fetchall()}
+        for col, typ in _MIGRATE_COLS:
+            if col not in existing:
+                c.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typ}")
         # 启动时把未完成任务标记中断（断点续跑另见 orchestrator）
         c.execute("UPDATE jobs SET status='interrupted' "
                   "WHERE status NOT IN ('completed','failed','interrupted')")
@@ -62,7 +81,7 @@ def create_job(job_id: str, source: dict) -> None:
 def update_job(job_id: str, **fields) -> None:
     if not fields:
         return
-    for k in ("regime", "source", "logs"):
+    for k in ("regime", "source", "logs", "tokens"):
         if k in fields and not isinstance(fields[k], str):
             fields[k] = json.dumps(fields[k], ensure_ascii=False)
     fields["updated_at"] = _now()
@@ -88,16 +107,42 @@ def get_job(job_id: str) -> dict | None:
     if not row:
         return None
     d = dict(row)
-    for k in ("regime", "logs", "source"):
+    for k in ("regime", "logs", "source", "tokens"):
         try:
-            d[k] = json.loads(d[k]) if d[k] else ({} if k != "logs" else [])
+            if k == "logs":
+                d[k] = json.loads(d[k]) if d[k] else []
+            else:
+                d[k] = json.loads(d[k]) if d[k] else {}
         except Exception:
             pass
     return d
 
 
-def list_jobs(limit: int = 50) -> list[dict]:
+def list_jobs(limit: int = 50, offset: int = 0, status: str | None = None,
+              q: str | None = None) -> dict:
+    """历史记录分页查询。返回 {total, items}。"""
+    where, params = [], []
+    if status:
+        where.append("status=?")
+        params.append(status)
+    if q:
+        where.append("(std_name LIKE ? OR source LIKE ? OR job_id LIKE ?)")
+        params.extend([f"%{q}%"] * 3)
+    w = ("WHERE " + " AND ".join(where)) if where else ""
     with _LOCK, _conn() as c:
-        rows = c.execute("SELECT job_id,status,stage,slug,created_at,updated_at "
-                         "FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
-    return [dict(r) for r in rows]
+        total = c.execute(f"SELECT COUNT(*) AS n FROM jobs {w}", params).fetchone()["n"]
+        rows = c.execute(
+            "SELECT job_id,status,stage,std_name,slug,duration_ms,tokens,"
+            "created_at,updated_at,finished_at,result_path,source "
+            f"FROM jobs {w} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [int(limit), int(offset)]).fetchall()
+    items = []
+    for r in rows:
+        d = dict(r)
+        for k in ("tokens", "source"):
+            try:
+                d[k] = json.loads(d[k]) if d[k] else {}
+            except Exception:
+                pass
+        items.append(d)
+    return {"total": total, "items": items}
