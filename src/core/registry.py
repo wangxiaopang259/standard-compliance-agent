@@ -74,6 +74,44 @@ def _extract_clauses(txt: str) -> list[str]:
     return sorted(cs)
 
 
+def _norm_std(s: str) -> str:
+    return re.sub(r"[^0-9A-Za-z]", "", s or "").upper()
+
+
+def _base_name(name: str) -> str:
+    """去掉技能名前缀里的标准号（gb16994-xxx / gb169941-xxx → xxx）。"""
+    return re.sub(r"^[a-z]{1,6}\d{1,6}[-_]", "", (name or "").lower())
+
+
+def _mtime(it: dict) -> float:
+    try:
+        return Path(it["path"]).stat().st_mtime
+    except Exception:
+        return 0.0
+
+
+def dedupe(items: list[dict]) -> list[dict]:
+    """按「标准号 + 条号」去重：同一标准同一条款只保留较新者；
+    覆盖了**新条款**的 skill 仍保留（不丢覆盖）。用于清理同一标准多次蒸馏的重复批次。"""
+    from collections import defaultdict
+
+    kept: list[dict] = []
+    seen_key: set = set()
+    claimed: dict[str, set] = defaultdict(set)   # standard -> 已占用条号
+    for it in sorted(items, key=_mtime, reverse=True):
+        std = _norm_std(it.get("standard", ""))
+        base = _base_name(it.get("skill", ""))
+        if (std, base) in seen_key:
+            continue
+        cls = set(it.get("clauses") or [])
+        if cls and cls.issubset(claimed[std]):   # 条号已被更新的 skill 完全覆盖 → 重复
+            continue
+        seen_key.add((std, base))
+        claimed[std] |= cls
+        kept.append(it)
+    return kept
+
+
 def build(specs_dir: Path, standard_of: dict | None = None) -> list[dict]:
     items = []
     for spec in sorted(specs_dir.iterdir()):
@@ -100,6 +138,10 @@ def build(specs_dir: Path, standard_of: dict | None = None) -> list[dict]:
                 "clauses": clauses or _extract_clauses(txt),   # 回退：正则抽
                 "triggers": triggers,
             })
+    before = len(items)
+    items = dedupe(items)
+    if before != len(items):
+        print(f"[registry] 去重：{before} → {len(items)}（按标准号+条号）", flush=True)
     return items
 
 
