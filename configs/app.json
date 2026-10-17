@@ -15,8 +15,9 @@
   "vl": { "default_model": "qwen3.8-27b", "base_url": "http://112.111.7.77:31632/v1", "api_key": "" },
   "mineru": { "url": "http://10.100.100.99:8000", "enabled": true, "timeout": 1800 },
   "compliance": {
+    "_comment": "外部依赖用'向上查找'解析，目录重组不影响；可用 SPECS_DIR / STANDARDS_DIR 覆盖",
     "specs_dir": "../standard-distill-agent/specs",
-    "standards_dir": "../../10000-强标实施责任清单/05-强标文本",
+    "standards_dir": "10000-强标实施责任清单/05-强标文本",
     "max_std_clauses": 120
   }
 }

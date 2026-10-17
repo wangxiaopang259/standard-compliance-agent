@@ -26,6 +26,16 @@ def _deep_merge(base: dict, over: dict) -> dict:
     return base
 
 
+def _upfind(rel: str, start: Path) -> Path | None:
+    """从 start 向上逐级找 rel，命中即返回（应对目录重组/移动）。"""
+    relp = Path(rel)
+    for base in [start, *start.parents]:
+        cand = base / relp
+        if cand.exists():
+            return cand.resolve()
+    return None
+
+
 def _load_config() -> tuple[dict, str]:
     env = os.environ.get("APP_ENV", "prod").strip() or "prod"
     base = _read_json(CONFIG_DIR / "app.json")
@@ -65,8 +75,13 @@ class Settings:
                                                  mineru.get("enabled", True))).lower() in ("1", "true", "yes")
         self.mineru_timeout = int(os.environ.get("MINERU_TIMEOUT", mineru.get("timeout", 1800)))
 
-        self.specs_dir = (PROJECT_ROOT / comp.get("specs_dir", "../standard-distill-agent/specs")).resolve()
-        self.standards_dir = (PROJECT_ROOT / comp.get("standards_dir", "../../10000-强标实施责任清单/05-强标文本")).resolve()
+        # 用"向上查找"解析外部依赖目录，避免目录重组后相对路径失效
+        specs_rel = os.environ.get("SPECS_DIR", comp.get("specs_dir", "../standard-distill-agent/specs"))
+        std_rel = os.environ.get("STANDARDS_DIR", comp.get("standards_dir", "10000-强标实施责任清单/05-强标文本"))
+        self.specs_dir = _upfind(specs_rel, PROJECT_ROOT) or (PROJECT_ROOT / specs_rel).resolve()
+        self.standards_dir = (_upfind(std_rel, PROJECT_ROOT)
+                              or _upfind("10000-强标实施责任清单/05-强标文本", PROJECT_ROOT)
+                              or (PROJECT_ROOT / std_rel).resolve())
         self.max_std_clauses = int(comp.get("max_std_clauses", 120))
 
         self.uploads_dir = PROJECT_ROOT / "uploads"
