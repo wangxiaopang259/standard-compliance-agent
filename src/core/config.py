@@ -65,6 +65,7 @@ class Settings:
         self.llm_disable_thinking = str(
             os.environ.get("LLM_DISABLE_THINKING", llm_prov.get("disable_thinking", True))
         ).lower() in ("1", "true", "yes")
+        self.llm_tunnel_cmd = os.environ.get("TUNNEL_CMD", llm.get("tunnel_cmd", ""))
 
         self.vl_base_url = os.environ.get("VL_BASE_URL", vl.get("base_url", self.llm_base_url)).rstrip("/")
         self.vl_api_key = os.environ.get("VL_API_KEY", vl.get("api_key", self.llm_api_key))

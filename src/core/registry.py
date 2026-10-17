@@ -104,10 +104,11 @@ def dedupe(items: list[dict]) -> list[dict]:
         if (std, base) in seen_key:
             continue
         cls = set(it.get("clauses") or [])
-        if cls and cls.issubset(claimed[std]):   # 条号已被更新的 skill 完全覆盖 → 重复
-            continue
+        if it.get("clauses_explicit") and cls and cls.issubset(claimed[std]):
+            continue   # 仅对显式条号做重叠去重（避免误删空 clauses 的不同技能）
         seen_key.add((std, base))
-        claimed[std] |= cls
+        if it.get("clauses_explicit"):
+            claimed[std] |= cls   # 仅显式条款参与占用，避免空 clauses 的 fallback 误伤
         kept.append(it)
     return kept
 
@@ -136,6 +137,7 @@ def build(specs_dir: Path, standard_of: dict | None = None) -> list[dict]:
                 "path": str(f),
                 "description": desc,
                 "clauses": clauses or _extract_clauses(txt),   # 回退：正则抽
+                "clauses_explicit": bool(clauses),
                 "triggers": triggers,
             })
     before = len(items)
