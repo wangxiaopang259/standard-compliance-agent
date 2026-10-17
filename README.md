@@ -25,15 +25,15 @@ POST /api/v1/compliance  (draft + [standard 或 spec_slug 或 auto])
 ## 快速开始
 ```bash
 pip install -r requirements.txt
-APP_ENV=dev uvicorn src.api.main:app --host 0.0.0.0 --port 6002
+APP_ENV=dev uvicorn src.api.main:app --host 0.0.0.0 --port 5013
 ```
 
 ```bash
 # 用已蒸馏判据
-curl -X POST http://localhost:6002/api/v1/compliance \
+curl -X POST http://localhost:5013/api/v1/compliance \
   -F "draft=@待审查文件.md" -F "spec_slug=gb-16994.1-2021" -F "std_name=GB 16994.1-2021"
 # 用标准 PDF
-curl -X POST http://localhost:6002/api/v1/compliance \
+curl -X POST http://localhost:5013/api/v1/compliance \
   -F "draft=@待审查文件.md" -F "standard=@GB+16994.1-2021.pdf"
 # → {job_id} → /status/{id} → /result/{id} → /download/{id}
 ```

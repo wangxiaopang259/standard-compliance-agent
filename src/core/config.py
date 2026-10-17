@@ -54,7 +54,7 @@ class Settings:
         comp = cfg.get("compliance", {})
 
         self.host = os.environ.get("HOST", server.get("host", "0.0.0.0"))
-        self.port = int(os.environ.get("PORT", server.get("port", 6002)))
+        self.port = int(os.environ.get("PORT", server.get("port", 5013)))
 
         llm_prov = (llm.get("providers") or {}).get("qwen38", {})
         self.llm_base_url = os.environ.get("LLM_BASE_URL", llm_prov.get("base_url", "")).rstrip("/")

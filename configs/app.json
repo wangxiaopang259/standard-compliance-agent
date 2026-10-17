@@ -1,6 +1,6 @@
 {
   "_comment": "贯标核验智能体配置。LLM/VL/MinerU 维护在此；环境变量优先级最高（APP_ENV 选环境）。",
-  "server": { "host": "0.0.0.0", "port": 6002 },
+  "server": { "host": "0.0.0.0", "port": 5013 },
   "llm": {
     "default_model": "qwen3.8-27b",
     "providers": {

@@ -2,11 +2,11 @@
   "info": {
     "name": "Standard Compliance Agent",
     "_postman_id": "7b2e4d1a-2c5f-4a8b-b0e1-compliance6002",
-    "description": "贯标核验智能体（端口 6002）。判断一份待审查文件（施工组织/作业方案/验收报告…）是否满足某标准条款。\n\n三种判据来源：① 上传标准 PDF；② spec_slug 指定已蒸馏目录；③ 只传草案（自动路由）。\n上传接口的 file 字段请在 Postman 里选择本地文件。",
+    "description": "贯标核验智能体（端口 5013）。判断一份待审查文件（施工组织/作业方案/验收报告…）是否满足某标准条款。\n\n三种判据来源：① 上传标准 PDF；② spec_slug 指定已蒸馏目录；③ 只传草案（自动路由）。\n上传接口的 file 字段请在 Postman 里选择本地文件。",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:6002" },
+    { "key": "baseUrl", "value": "http://localhost:5013" },
     { "key": "job_id", "value": "" },
     { "key": "spec_slug", "value": "gb-16994.1-2021" },
     { "key": "std_name", "value": "GB 16994.1-2021" }

@@ -4,6 +4,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-ENV PORT=6002
-EXPOSE 6002
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "6002"]
+ENV PORT=5013
+EXPOSE 5013
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "5013"]
