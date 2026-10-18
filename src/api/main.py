@@ -247,6 +247,14 @@ async def status(job_id: str):
     return _job_view(job)
 
 
+def _out_dir(job: dict) -> Path:
+    """结果目录：优先用记录里的 result_path；目录已失效（如目录迁移）则回退当前 output_dir。"""
+    p = Path(job["result_path"]) if job.get("result_path") else None
+    if p and p.is_dir():
+        return p
+    return settings.output_dir / job["job_id"]
+
+
 @app.get("/api/v1/compliance/result/{job_id}")
 async def result(job_id: str):
     job = store.get_job(job_id)
@@ -256,7 +264,7 @@ async def result(job_id: str):
         return JSONResponse({"job_id": job_id, "status": job["status"],
                              "progress": _job_view(job)["progress"],
                              "message": "尚未完成"}, status_code=202)
-    out = Path(job["result_path"]) if job.get("result_path") else settings.output_dir / job_id
+    out = _out_dir(job)
     jf = out / "compliance.json"
     data = json.loads(jf.read_text(encoding="utf-8")) if jf.exists() else {}
     rf = out / "贯标核查报告.md"
@@ -287,8 +295,10 @@ async def job_detail(job_id: str):
         raise HTTPException(404, "job not found")
     view = _job_view(job)
     # trace 摘要（不塞全量调用链，避免响应过大；全量走 /download/trace）
-    tp = Path(job["trace_path"]) if job.get("trace_path") else None
-    if tp and tp.exists():
+    tp = Path(job["trace_path"]) if job.get("trace_path") else _out_dir(job) / "trace.json"
+    if not tp.exists():
+        tp = _out_dir(job) / "trace.json"
+    if tp.exists():
         try:
             td = json.loads(tp.read_text(encoding="utf-8"))
             view["trace_summary"] = {
@@ -309,7 +319,9 @@ async def trace_inline(job_id: str):
     job = store.get_job(job_id)
     if not job:
         raise HTTPException(404, "job not found")
-    p = Path(job["trace_path"]) if job.get("trace_path") else settings.output_dir / job_id / "trace.json"
+    p = Path(job["trace_path"]) if job.get("trace_path") else _out_dir(job) / "trace.json"
+    if not p.exists():
+        p = _out_dir(job) / "trace.json"
     if not p.exists():
         raise HTTPException(404, "trace 未就绪")
     return JSONResponse(json.loads(p.read_text(encoding="utf-8")))
@@ -333,7 +345,7 @@ def _media_for(name: str) -> str:
 
 
 def _resolve(job: dict, kind: str) -> tuple[Path, str]:
-    out = Path(job["result_path"]) if job.get("result_path") else settings.output_dir / job["job_id"]
+    out = _out_dir(job)
     src = job.get("source") or {}
     if isinstance(src, str):
         try:
@@ -346,6 +358,8 @@ def _resolve(job: dict, kind: str) -> tuple[Path, str]:
         return out / "compliance.json", "application/json; charset=utf-8"
     if kind == "trace":
         p = Path(job["trace_path"]) if job.get("trace_path") else out / "trace.json"
+        if not p.exists():
+            p = out / "trace.json"
         return p, "application/json; charset=utf-8"
     if kind == "original":
         name = src.get("draft") or ""

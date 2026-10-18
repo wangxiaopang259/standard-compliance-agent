@@ -117,6 +117,7 @@ async function showResult(){
   let r;
   try{ r=await (await fetch('/api/v1/compliance/result/'+curId)).json(); }catch(e){ c.innerHTML='<div class="muted">结果加载失败</div>'; return; }
   let h='<div class="row"><b>贯标核查报告</b><span style="flex:1"></span>'+
+    '<a href="/api/v1/compliance/download/'+curId+'/original" target="_blank">原文</a> '+
     '<a href="/api/v1/compliance/download/'+curId+'/report" target="_blank">报告.md</a> '+
     '<a href="/api/v1/compliance/download/'+curId+'/result" target="_blank">compliance.json</a> '+
     '<a href="/api/v1/compliance/download/'+curId+'/trace" target="_blank">trace</a></div>'+
@@ -131,13 +132,19 @@ async function loadHistory(){
     const r=await (await fetch('/api/v1/compliance/jobs?limit=20')).json();
     const items=r.items||[];
     if(!items.length){ $('history').textContent='暂无记录'; return; }
-    let h='<table><tr><th>任务</th><th>标准</th><th>状态</th><th>耗时</th><th>创建</th></tr>';
+    let h='<table><tr><th>任务</th><th>原文文件</th><th>标准</th><th>状态</th><th>耗时</th><th>创建</th><th>下载</th></tr>';
     for(const it of items){
       const cls=it.status==='completed'?'green':(it.status==='failed'?'red':'amber');
-      h+='<tr><td>'+esc(it.job_id)+'</td><td>'+esc(it.std_name||it.slug||'')+'</td>'+
+      const src=(it.source&&it.source.draft)||'';
+      const id=it.job_id;
+      const dls='<a href="/api/v1/compliance/download/'+id+'/original" title="待审查原文">原文</a> · '+
+        '<a href="/api/v1/compliance/download/'+id+'/report" title="贯标核查报告">报告</a> · '+
+        '<a href="/api/v1/compliance/download/'+id+'/result" title="compliance.json">结果</a> · '+
+        '<a href="/api/v1/compliance/download/'+id+'/trace" title="trace.json">trace</a>';
+      h+='<tr><td>'+esc(id)+'</td><td title="'+esc(src)+'">'+esc(src||'—')+'</td><td>'+esc(it.std_name||it.slug||'')+'</td>'+
         '<td><span class="pill '+cls+'">'+esc(it.status)+'</span></td>'+
         '<td class="muted">'+(it.duration_ms?(it.duration_ms/1000).toFixed(1)+'s':'—')+'</td>'+
-        '<td class="muted">'+fmt(it.created_at)+'</td></tr>';
+        '<td class="muted">'+fmt(it.created_at)+'</td><td>'+dls+'</td></tr>';
     }
     $('history').innerHTML=h+'</table>';
   }catch(e){ $('history').textContent='加载失败'; }
